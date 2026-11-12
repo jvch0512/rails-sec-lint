@@ -1,0 +1,26 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+require "json"
+require_relative "../lib/rails_sec_lint"
+
+format = "text"
+fail_on = :low
+OptionParser.new do |o|
+  o.banner = "usage: rails-sec-lint [options] [path]"
+  o.on("--format FORMAT", %w[text json], "text (default) or json") { |v| format = v }
+  o.on("--fail-on LEVEL", RailsSecLint::SEVERITIES.map(&:to_s), "minimum severity that fails the run") { |v| fail_on = v.to_sym }
+end.parse!
+
+findings = RailsSecLint.scan_path(ARGV.first || ".")
+if format == "json"
+  puts JSON.pretty_generate(findings.map(&:to_h))
+else
+  findings.each do |f|
+    puts format("[%-8s] %s %s:%d  (%s)\n    %s\n    %s", f.rule.severity.to_s.upcase, f.rule.id, f.file, f.line, f.rule.cwe, f.text.strip, f.rule.message)
+  end
+  puts "#{findings.size} finding(s)"
+end
+worst = RailsSecLint.worst(findings)
+exit(worst && worst >= RailsSecLint::SEVERITIES.index(fail_on) ? 2 : 0)
